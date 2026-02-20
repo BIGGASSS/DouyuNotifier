@@ -9,7 +9,7 @@ and sends Telegram notifications when a stream starts.
 import time
 import sys
 from datetime import datetime
-from typing import Set, Optional
+from typing import Set
 
 from config import POLL_INTERVAL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 from auth import get_douyu_cookies
@@ -38,7 +38,7 @@ def main():
     print(f"Polling every {POLL_INTERVAL} seconds")
     print("Press Ctrl+C to stop\n")
 
-    previous_live: Optional[Set[str]] = None
+    previous_live: Set[str] = set()
 
     while True:
         try:
