@@ -3,14 +3,17 @@
 ## Build/Run Commands
 
 ```bash
+# Create a virtual environment
+uv venv
+
+# Activate the virtual environment
+source .venv/bin/activate
+
 # Install dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # Run the application
-python main.py
-
-# Run with Python 3 explicitly
-python3 main.py
+uv run python main.py
 ```
 
 ## Test Commands
@@ -19,19 +22,19 @@ This project currently has no tests. When adding tests:
 
 ```bash
 # Install pytest
-pip install pytest pytest-cov
+uv pip install pytest pytest-cov
 
 # Run all tests
-pytest
+uv run pytest
 
 # Run a single test file
-pytest test_fetcher.py
+uv run pytest test_fetcher.py
 
 # Run a specific test
-pytest test_fetcher.py::test_parse_response
+uv run pytest test_fetcher.py::test_parse_response
 
 # Run with coverage
-pytest --cov=. --cov-report=term-missing
+uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ## Lint/Format Commands
@@ -40,19 +43,19 @@ Recommended tools for this project:
 
 ```bash
 # Install linting/formatting tools
-pip install ruff mypy
+uv pip install ruff mypy
 
 # Format code
-ruff format .
+uv run ruff format .
 
 # Check linting
-ruff check .
+uv run ruff check .
 
 # Fix auto-fixable lint issues
-ruff check . --fix
+uv run ruff check . --fix
 
 # Type checking
-mypy .
+uv run mypy .
 ```
 
 ## Code Style Guidelines
