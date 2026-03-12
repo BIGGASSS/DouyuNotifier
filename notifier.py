@@ -9,11 +9,14 @@ from config import (
     TELEGRAM_CHAT_ID,
     TELEGRAM_LONG_POLL_TIMEOUT,
 )
-from models import Room
+from models import Room, TelegramPollingConflict
 
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 TELEGRAM_SEND_MESSAGE_API = f"{TELEGRAM_API_BASE}/sendMessage"
 TELEGRAM_GET_UPDATES_API = f"{TELEGRAM_API_BASE}/getUpdates"
+TELEGRAM_DELETE_WEBHOOK_API = f"{TELEGRAM_API_BASE}/deleteWebhook"
+
+_TELEGRAM_UPDATES_PREPARED = False
 
 
 def send_telegram(text: str) -> bool:
@@ -48,6 +51,46 @@ def get_next_update_offset() -> int:
     return 0
 
 
+def prepare_telegram_updates() -> None:
+    """Disable Telegram webhooks once so long polling can use getUpdates."""
+    global _TELEGRAM_UPDATES_PREPARED
+
+    if _TELEGRAM_UPDATES_PREPARED:
+        return
+
+    try:
+        response = requests.post(
+            TELEGRAM_DELETE_WEBHOOK_API,
+            json={'drop_pending_updates': False},
+            timeout=10,
+        )
+    except requests.exceptions.RequestException as error:
+        print(f'Warning: Failed to delete Telegram webhook: {error}')
+        return
+
+    description = _extract_telegram_description(response)
+    if response.status_code == 409:
+        raise TelegramPollingConflict(_build_polling_conflict_message(description))
+
+    if not response.ok:
+        print(
+            'Warning: Telegram deleteWebhook failed: '
+            f'{response.status_code} {description}'
+        )
+        return
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {'ok': True}
+
+    if not payload.get('ok', False):
+        print(f'Warning: Telegram deleteWebhook returned an error: {payload}')
+        return
+
+    _TELEGRAM_UPDATES_PREPARED = True
+
+
 def get_telegram_updates(
     offset: Optional[int] = None,
     timeout: int = TELEGRAM_LONG_POLL_TIMEOUT,
@@ -62,6 +105,7 @@ def get_telegram_updates(
     Returns:
         Tuple of updates and the next update offset
     """
+    prepare_telegram_updates()
     params: Dict[str, Any] = {'timeout': timeout}
     if offset is not None:
         params['offset'] = offset
@@ -72,11 +116,22 @@ def get_telegram_updates(
             params=params,
             timeout=timeout + 10,
         )
-        response.raise_for_status()
-        payload = response.json()
     except requests.exceptions.RequestException as error:
         print(f'Warning: Failed to fetch Telegram updates: {error}')
         return [], offset or 0
+
+    description = _extract_telegram_description(response)
+    if response.status_code == 409:
+        raise TelegramPollingConflict(_build_polling_conflict_message(description))
+
+    if not response.ok:
+        print(
+            'Warning: Telegram updates request failed: '
+            f'{response.status_code} {description}'
+        )
+        return [], offset or 0
+
+    payload = response.json()
 
     if not payload.get('ok'):
         print(f'Warning: Telegram API returned an error: {payload}')
@@ -117,6 +172,30 @@ def wait_for_chat_message(offset: int) -> Tuple[Optional[str], int]:
             text = message.get('text', '').strip()
             if text:
                 return text, current_offset
+
+
+def _extract_telegram_description(response: requests.Response) -> str:
+    """Extract Telegram API error descriptions safely."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text.strip()
+
+    return str(payload.get('description', '')).strip()
+
+
+def _build_polling_conflict_message(description: str) -> str:
+    """Return a readable explanation for Telegram getUpdates conflicts."""
+    if 'webhook' in description.lower():
+        return (
+            'Telegram bot polling is blocked by an active webhook. '
+            'Disable the webhook for this bot token and try again.'
+        )
+
+    return (
+        'Telegram getUpdates is already being consumed by another process for '
+        'this bot token. Stop the other bot instance or use a different bot token.'
+    )
 
 
 def notify_new_live(rooms: List[Room], previous_live: Optional[Set[str]]) -> Set[str]:

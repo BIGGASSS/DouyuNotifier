@@ -24,3 +24,7 @@ class NotLoginError(Exception):
 
 class DouyuAPIError(Exception):
     pass
+
+
+class TelegramPollingConflict(Exception):
+    pass

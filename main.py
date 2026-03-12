@@ -21,7 +21,7 @@ from config import (
     TELEGRAM_CHAT_ID,
 )
 from fetcher import fetch_douyu_live_status
-from models import DouyuAPIError, NotLoginError, Room
+from models import DouyuAPIError, NotLoginError, Room, TelegramPollingConflict
 from notifier import (
     get_next_update_offset,
     notify_new_live,
@@ -76,7 +76,17 @@ def recover_cookies_via_telegram(reason: str) -> Tuple[Dict[str, str], List[Room
         Tuple of validated cookies and the corresponding room list
     """
     print(f'Authentication requires a new cookie: {reason}')
-    next_offset = get_next_update_offset()
+    try:
+        next_offset = get_next_update_offset()
+    except TelegramPollingConflict as error:
+        print(f'Telegram polling conflict: {error}')
+        send_telegram(
+            'I could send notifications, but I cannot receive your reply because '
+            f'this bot token has a Telegram polling conflict.\nReason: '
+            f'<code>{escape(str(error))}</code>'
+        )
+        raise
+
     prompt_sent = send_telegram(
         'Douyu cookie expired or is invalid.\n'
         f'Reason: <code>{escape(reason)}</code>\n'
@@ -91,7 +101,16 @@ def recover_cookies_via_telegram(reason: str) -> Tuple[Dict[str, str], List[Room
 
     while True:
         print('Waiting for a new cookie in Telegram...')
-        cookie_message, next_offset = wait_for_chat_message(next_offset)
+        try:
+            cookie_message, next_offset = wait_for_chat_message(next_offset)
+        except TelegramPollingConflict as error:
+            print(f'Telegram polling conflict: {error}')
+            send_telegram(
+                'I cannot receive your cookie reply because this bot token has a '
+                f'Telegram polling conflict.\nReason: <code>{escape(str(error))}</code>'
+            )
+            raise
+
         if not cookie_message:
             continue
 
@@ -144,12 +163,20 @@ def main():
 
     if not cookies:
         print('No local cookies available. Requesting one through Telegram.')
-        cookies, initial_rooms = recover_cookies_via_telegram('No local cookie found.')
+        try:
+            cookies, initial_rooms = recover_cookies_via_telegram('No local cookie found.')
+        except TelegramPollingConflict as error:
+            print(f'Error: {error}')
+            sys.exit(1)
     else:
         try:
             initial_rooms = validate_cookies(cookies)
         except NotLoginError as error:
-            cookies, initial_rooms = recover_cookies_via_telegram(str(error))
+            try:
+                cookies, initial_rooms = recover_cookies_via_telegram(str(error))
+            except TelegramPollingConflict as conflict_error:
+                print(f'Error: {conflict_error}')
+                sys.exit(1)
         except DouyuAPIError as error:
             print(f'Initial validation failed: {error}')
             print('Starting monitor anyway and retrying in the polling loop.')
@@ -174,7 +201,11 @@ def main():
 
         except NotLoginError as e:
             print(f'\nAuthentication Error: {e}')
-            cookies, rooms = recover_cookies_via_telegram(str(e))
+            try:
+                cookies, rooms = recover_cookies_via_telegram(str(e))
+            except TelegramPollingConflict as error:
+                print(f'Error: {error}')
+                sys.exit(1)
             live_count = sum(1 for r in rooms if r.is_live)
             print(
                 f'[{datetime.now():%H:%M:%S}] Recovered with '
