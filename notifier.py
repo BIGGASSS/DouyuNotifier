@@ -1,18 +1,122 @@
+import time
+from html import escape
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 import requests
-from typing import List, Optional, Set
+
+from config import (
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+    TELEGRAM_LONG_POLL_TIMEOUT,
+)
 from models import Room
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+TELEGRAM_API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+TELEGRAM_SEND_MESSAGE_API = f"{TELEGRAM_API_BASE}/sendMessage"
+TELEGRAM_GET_UPDATES_API = f"{TELEGRAM_API_BASE}/getUpdates"
 
 
-def send_telegram(text: str):
+def send_telegram(text: str) -> bool:
     """Send a message via Telegram bot."""
-    requests.post(TELEGRAM_API, json={
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-    }, timeout=10)
+    try:
+        response = requests.post(
+            TELEGRAM_SEND_MESSAGE_API,
+            json={
+                'chat_id': TELEGRAM_CHAT_ID,
+                'text': text,
+                'parse_mode': 'HTML',
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return True
+    except requests.exceptions.RequestException as error:
+        print(f'Warning: Failed to send Telegram message: {error}')
+        return False
+
+
+def get_next_update_offset() -> int:
+    """
+    Return the next update offset so only future chat messages are consumed.
+
+    Returns:
+        Telegram update offset for the next unread message
+    """
+    updates, next_offset = get_telegram_updates(timeout=0)
+    if updates:
+        return next_offset
+    return 0
+
+
+def get_telegram_updates(
+    offset: Optional[int] = None,
+    timeout: int = TELEGRAM_LONG_POLL_TIMEOUT,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    Fetch Telegram bot updates.
+
+    Args:
+        offset: Optional Telegram update offset
+        timeout: Long-poll timeout in seconds
+
+    Returns:
+        Tuple of updates and the next update offset
+    """
+    params: Dict[str, Any] = {'timeout': timeout}
+    if offset is not None:
+        params['offset'] = offset
+
+    try:
+        response = requests.get(
+            TELEGRAM_GET_UPDATES_API,
+            params=params,
+            timeout=timeout + 10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.exceptions.RequestException as error:
+        print(f'Warning: Failed to fetch Telegram updates: {error}')
+        return [], offset or 0
+
+    if not payload.get('ok'):
+        print(f'Warning: Telegram API returned an error: {payload}')
+        return [], offset or 0
+
+    updates = payload.get('result', [])
+    next_offset = offset or 0
+    if updates:
+        next_offset = int(updates[-1]['update_id']) + 1
+
+    return updates, next_offset
+
+
+def wait_for_chat_message(offset: int) -> Tuple[Optional[str], int]:
+    """
+    Wait for the next text message from the configured Telegram chat.
+
+    Args:
+        offset: Telegram update offset to start from
+
+    Returns:
+        Tuple of message text and next update offset
+    """
+    current_offset = offset
+
+    while True:
+        updates, current_offset = get_telegram_updates(offset=current_offset)
+        if not updates:
+            time.sleep(5)
+            continue
+
+        for update in updates:
+            message = update.get('message') or update.get('edited_message') or {}
+            chat = message.get('chat') or {}
+            if str(chat.get('id', '')) != str(TELEGRAM_CHAT_ID):
+                continue
+
+            text = message.get('text', '').strip()
+            if text:
+                return text, current_offset
 
 
 def notify_new_live(rooms: List[Room], previous_live: Optional[Set[str]]) -> Set[str]:
@@ -34,9 +138,9 @@ def notify_new_live(rooms: List[Room], previous_live: Optional[Set[str]]) -> Set
         for room in rooms:
             if room.room_id in new_live_ids:
                 text = (
-                    f"<b>{room.streamer_name}</b> is now live!\n"
-                    f"{room.room_name}\n"
-                    f"Category: {room.area_name}\n"
+                    f'<b>{escape(room.streamer_name)}</b> is now live!\n'
+                    f'{escape(room.room_name)}\n'
+                    f'Category: {escape(room.area_name)}\n'
                     f"<a href=\"{room.url}\">Watch</a>"
                 )
                 send_telegram(text)

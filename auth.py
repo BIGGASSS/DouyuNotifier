@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from typing import Dict
 
 COOKIES_FILE = "cookies.json"
@@ -12,7 +12,7 @@ def get_douyu_cookies() -> Dict[str, str]:
     2. Prompt user for manual input
     """
     # Method 1: Load from file
-    cookies = _load_from_file()
+    cookies = load_cookies()
     if cookies:
         print(f"✓ Loaded cookies from {COOKIES_FILE}")
         return cookies
@@ -25,12 +25,12 @@ def get_douyu_cookies() -> Dict[str, str]:
 
     # Save for future use
     if cookies:
-        _save_to_file(cookies)
+        save_cookies(cookies)
 
     return cookies
 
 
-def _load_from_file() -> Dict[str, str]:
+def load_cookies() -> Dict[str, str]:
     """Load cookies from cookies.json file."""
     try:
         if os.path.exists(COOKIES_FILE):
@@ -41,7 +41,7 @@ def _load_from_file() -> Dict[str, str]:
     return {}
 
 
-def _save_to_file(cookies: Dict[str, str]):
+def save_cookies(cookies: Dict[str, str]) -> None:
     """Save cookies to cookies.json file."""
     try:
         with open(COOKIES_FILE, 'w', encoding='utf-8') as f:
@@ -62,12 +62,7 @@ def _manual_cookie_input() -> Dict[str, str]:
     cookie_str = input("\nCookie string (or press Enter for individual input): ").strip()
 
     if cookie_str:
-        # Parse cookie string
-        for pair in cookie_str.split(';'):
-            pair = pair.strip()
-            if '=' in pair:
-                name, value = pair.split('=', 1)
-                cookies[name.strip()] = value.strip()
+        cookies = parse_cookie_string(cookie_str)
     else:
         # Option 2: Individual input
         print("\nEnter cookie name and value (empty name to finish):")
@@ -80,3 +75,43 @@ def _manual_cookie_input() -> Dict[str, str]:
                 cookies[name] = value
 
     return cookies
+
+
+def parse_cookie_string(cookie_str: str) -> Dict[str, str]:
+    """
+    Parse a raw cookie header string into a dictionary.
+
+    Args:
+        cookie_str: Cookie string in ``name=value; name2=value2`` format
+
+    Returns:
+        Parsed cookies keyed by cookie name
+    """
+    cleaned_cookie_str = _normalize_cookie_string(cookie_str)
+    cookies: Dict[str, str] = {}
+
+    for pair in cleaned_cookie_str.split(';'):
+        stripped_pair = pair.strip()
+        if not stripped_pair or '=' not in stripped_pair:
+            continue
+
+        name, value = stripped_pair.split('=', 1)
+        name = name.strip()
+        value = value.strip()
+        if name and value:
+            cookies[name] = value
+
+    return cookies
+
+
+def _normalize_cookie_string(cookie_str: str) -> str:
+    """Strip common wrappers users include when pasting cookies."""
+    cleaned_cookie_str = cookie_str.strip()
+
+    if cleaned_cookie_str.startswith('```') and cleaned_cookie_str.endswith('```'):
+        cleaned_cookie_str = cleaned_cookie_str.strip('`').strip()
+
+    if cleaned_cookie_str.lower().startswith('cookie:'):
+        cleaned_cookie_str = cleaned_cookie_str.split(':', 1)[1].strip()
+
+    return cleaned_cookie_str.replace('\n', '; ')
