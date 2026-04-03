@@ -18,6 +18,81 @@ TELEGRAM_DELETE_WEBHOOK_API = f"{TELEGRAM_API_BASE}/deleteWebhook"
 
 _TELEGRAM_UPDATES_PREPARED = False
 
+_START_TIME = time.time()
+_last_poll_time: Optional[float] = None
+_live_streamer_count: int = 0
+
+
+def update_health_state(live_count: int) -> None:
+    """Update health state tracking for /ping responses."""
+    global _last_poll_time, _live_streamer_count
+    _last_poll_time = time.time()
+    _live_streamer_count = live_count
+
+
+def _handle_ping_command() -> None:
+    """Respond to a /ping command with bot health status."""
+    import datetime
+
+    uptime_seconds = int(time.time() - _START_TIME)
+    hours, remainder = divmod(uptime_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if hours:
+        uptime_str = f"{hours}h {minutes}m {seconds}s"
+    elif minutes:
+        uptime_str = f"{minutes}m {seconds}s"
+    else:
+        uptime_str = f"{seconds}s"
+
+    if _last_poll_time is not None:
+        seconds_ago = int(time.time() - _last_poll_time)
+        if seconds_ago < 60:
+            last_poll_str = f"{seconds_ago}s ago"
+        else:
+            last_poll_str = f"{seconds_ago // 60}m ago"
+    else:
+        last_poll_str = "never"
+
+    text = (
+        f"<b>Pong!</b>\n"
+        f"Uptime: {uptime_str}\n"
+        f"Last poll: {last_poll_str}\n"
+        f"Live streamers: {_live_streamer_count}"
+    )
+    send_telegram(text)
+
+
+def _process_ping_commands(offset: int) -> int:
+    """
+    Check for and handle any /ping commands in the Telegram update queue.
+
+    Args:
+        offset: Current Telegram update offset
+
+    Returns:
+        Updated offset after consuming /ping messages
+    """
+    current_offset = offset
+    try:
+        updates, current_offset = get_telegram_updates(
+            offset=current_offset, timeout=0
+        )
+    except TelegramPollingConflict:
+        return current_offset
+
+    for update in updates:
+        message = update.get('message') or update.get('edited_message') or {}
+        chat = message.get('chat') or {}
+        if str(chat.get('id', '')) != str(TELEGRAM_CHAT_ID):
+            continue
+
+        text = message.get('text', '').strip()
+        if text == '/ping':
+            _handle_ping_command()
+
+    return current_offset
+
 
 def send_telegram(text: str) -> bool:
     """Send a message via Telegram bot."""

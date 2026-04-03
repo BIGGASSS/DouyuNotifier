@@ -23,9 +23,11 @@ from config import (
 from fetcher import fetch_douyu_live_status
 from models import DouyuAPIError, NotLoginError, Room, TelegramPollingConflict
 from notifier import (
+    _process_ping_commands,
     get_next_update_offset,
     notify_new_live,
     send_telegram,
+    update_health_state,
     wait_for_chat_message,
 )
 
@@ -189,13 +191,17 @@ def main():
     previous_live: Optional[Set[str]] = None
     previous_live = notify_new_live(initial_rooms, previous_live)
 
+    ping_offset = 0
+
     while True:
         try:
             rooms = fetch_douyu_live_status(cookies)
             live_count = sum(1 for r in rooms if r.is_live)
             print(f'[{datetime.now():%H:%M:%S}] Checked: {live_count}/{len(rooms)} live')
 
+            update_health_state(live_count)
             previous_live = notify_new_live(rooms, previous_live)
+            ping_offset = _process_ping_commands(ping_offset)
 
             time.sleep(POLL_INTERVAL)
 
@@ -211,6 +217,7 @@ def main():
                 f'[{datetime.now():%H:%M:%S}] Recovered with '
                 f'{live_count}/{len(rooms)} live'
             )
+            update_health_state(live_count)
             previous_live = notify_new_live(rooms, previous_live)
             time.sleep(POLL_INTERVAL)
 
