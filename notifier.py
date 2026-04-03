@@ -63,12 +63,13 @@ def _handle_ping_command() -> None:
     send_telegram(text)
 
 
-def _process_ping_commands(offset: int) -> int:
+def _process_ping_commands(offset: int, timeout: int = 0) -> int:
     """
     Check for and handle any /ping commands in the Telegram update queue.
 
     Args:
         offset: Current Telegram update offset
+        timeout: Telegram getUpdates timeout in seconds
 
     Returns:
         Updated offset after consuming /ping messages
@@ -76,7 +77,7 @@ def _process_ping_commands(offset: int) -> int:
     current_offset = offset
     try:
         updates, current_offset = get_telegram_updates(
-            offset=current_offset, timeout=0
+            offset=current_offset, timeout=timeout
         )
     except TelegramPollingConflict:
         return current_offset

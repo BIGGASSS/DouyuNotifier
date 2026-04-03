@@ -1,7 +1,7 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
-from main import validate_cookies
+from main import validate_cookies, wait_with_ping_checks
 from models import DouyuAPIError, NotLoginError, Room
 
 
@@ -43,6 +43,41 @@ class ValidateCookiesTest(unittest.TestCase):
             validate_cookies({'acf_uid': '123'})
 
         self.assertEqual(fetch_douyu_live_status_mock.call_count, 1)
+
+
+class WaitWithPingChecksTest(unittest.TestCase):
+    @patch('main._process_ping_commands')
+    @patch('main.time.monotonic')
+    def test_wait_with_ping_checks_uses_ping_processing_until_deadline(
+        self,
+        monotonic_mock,
+        process_ping_commands_mock,
+    ) -> None:
+        monotonic_mock.side_effect = [100.0, 100.0, 104.2]
+        process_ping_commands_mock.return_value = 55
+
+        offset = wait_with_ping_checks(4, 12)
+
+        self.assertEqual(offset, 55)
+        process_ping_commands_mock.assert_called_once_with(12, timeout=4)
+
+    @patch('main._process_ping_commands')
+    @patch('main.time.monotonic')
+    def test_wait_with_ping_checks_splits_long_waits_by_long_poll_timeout(
+        self,
+        monotonic_mock,
+        process_ping_commands_mock,
+    ) -> None:
+        monotonic_mock.side_effect = [100.0, 100.0, 130.0, 171.0]
+        process_ping_commands_mock.side_effect = [20, 21]
+
+        offset = wait_with_ping_checks(70, 19)
+
+        self.assertEqual(offset, 21)
+        self.assertEqual(
+            process_ping_commands_mock.call_args_list,
+            [call(19, timeout=60), call(20, timeout=40)],
+        )
 
 
 if __name__ == '__main__':

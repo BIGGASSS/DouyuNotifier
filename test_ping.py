@@ -1,7 +1,7 @@
 import unittest
-from unittest.mock import patch, call
+from unittest.mock import patch
 
-from notifier import _handle_ping_command, update_health_state
+from notifier import _handle_ping_command, _process_ping_commands, update_health_state
 
 
 class PingCommandTest(unittest.TestCase):
@@ -57,6 +57,15 @@ class UpdateHealthStateTest(unittest.TestCase):
         from notifier import _last_poll_time, _live_streamer_count
         self.assertEqual(_last_poll_time, 12345.0)
         self.assertEqual(_live_streamer_count, 7)
+
+
+class ProcessPingCommandsTest(unittest.TestCase):
+    @patch('notifier.get_telegram_updates', return_value=([], 42))
+    def test_process_ping_commands_passes_timeout(self, get_telegram_updates_mock):
+        offset = _process_ping_commands(41, timeout=17)
+
+        self.assertEqual(offset, 42)
+        get_telegram_updates_mock.assert_called_once_with(offset=41, timeout=17)
 
 
 if __name__ == '__main__':

@@ -19,6 +19,7 @@ from config import (
     POLL_INTERVAL,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID,
+    TELEGRAM_LONG_POLL_TIMEOUT,
 )
 from fetcher import fetch_douyu_live_status
 from models import DouyuAPIError, NotLoginError, Room, TelegramPollingConflict
@@ -151,6 +152,29 @@ def recover_cookies_via_telegram(reason: str) -> Tuple[Dict[str, str], List[Room
         return candidate_cookies, rooms
 
 
+def wait_with_ping_checks(delay_seconds: int, ping_offset: int) -> int:
+    """
+    Wait until the next Douyu poll while continuing to process /ping commands.
+
+    Args:
+        delay_seconds: Total wait duration in seconds
+        ping_offset: Current Telegram update offset
+
+    Returns:
+        Updated Telegram update offset after processing pending commands
+    """
+    deadline = time.monotonic() + delay_seconds
+    current_offset = ping_offset
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return current_offset
+
+        timeout = min(TELEGRAM_LONG_POLL_TIMEOUT, max(1, int(remaining)))
+        current_offset = _process_ping_commands(current_offset, timeout=timeout)
+
+
 def main():
     """Main loop for polling Douyu live status."""
     print('Douyu Live Status Notifier')
@@ -201,9 +225,7 @@ def main():
 
             update_health_state(live_count)
             previous_live = notify_new_live(rooms, previous_live)
-            ping_offset = _process_ping_commands(ping_offset)
-
-            time.sleep(POLL_INTERVAL)
+            ping_offset = wait_with_ping_checks(POLL_INTERVAL, ping_offset)
 
         except NotLoginError as e:
             print(f'\nAuthentication Error: {e}')
@@ -219,12 +241,12 @@ def main():
             )
             update_health_state(live_count)
             previous_live = notify_new_live(rooms, previous_live)
-            time.sleep(POLL_INTERVAL)
+            ping_offset = wait_with_ping_checks(POLL_INTERVAL, ping_offset)
 
         except DouyuAPIError as e:
             print(f'\nAPI Error: {e}')
             print('Retrying in 30 seconds...')
-            time.sleep(30)
+            ping_offset = wait_with_ping_checks(30, ping_offset)
 
         except KeyboardInterrupt:
             print('\n\nStopping...')
@@ -233,7 +255,7 @@ def main():
         except Exception as e:
             print(f'\nUnexpected error: {e}')
             print('Retrying in 30 seconds...')
-            time.sleep(30)
+            ping_offset = wait_with_ping_checks(30, ping_offset)
 
 
 if __name__ == '__main__':
