@@ -9,7 +9,7 @@ Use `uv` for local setup, matching the README:
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
 Run the notifier locally with `uv run python main.py`. Run the full test suite with `python -m unittest`. For focused work, run a single file such as `python -m unittest test_auth`.

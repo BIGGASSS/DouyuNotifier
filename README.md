@@ -10,7 +10,7 @@ Monitors your followed streamers on Douyu TV and sends Telegram notifications wh
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
 3. Create a Telegram bot via [@BotFather](https://t.me/BotFather) and get the bot token
@@ -45,7 +45,7 @@ DouyuNotifier/
 ├── fetcher.py        # Douyu API client
 ├── notifier.py       # Telegram notifications
 ├── models.py         # Room dataclass and exceptions
-└── requirements.txt  # Dependencies
+└── pyproject.toml    # Project metadata and dependencies
 ```
 
 ## Configuration

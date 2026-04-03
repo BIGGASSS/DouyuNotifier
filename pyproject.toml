@@ -1,0 +1,8 @@
+[project]
+name = "douyu-notifier"
+version = "0.1.0"
+description = "Telegram bot that notifies when Douyu streamers go live"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.31.0",
+]
