@@ -27,6 +27,7 @@ from notifier import (
     _process_ping_commands,
     get_next_update_offset,
     notify_new_live,
+    notify_stream_end,
     send_telegram,
     update_health_state,
     wait_for_chat_message,
@@ -214,6 +215,7 @@ def main():
 
     previous_live: Optional[Set[str]] = None
     previous_live = notify_new_live(initial_rooms, previous_live)
+    previous_live = notify_stream_end(initial_rooms, previous_live)
 
     ping_offset = 0
 
@@ -225,6 +227,7 @@ def main():
 
             update_health_state(live_count)
             previous_live = notify_new_live(rooms, previous_live)
+            previous_live = notify_stream_end(rooms, previous_live)
             ping_offset = wait_with_ping_checks(POLL_INTERVAL, ping_offset)
 
         except NotLoginError as e:
@@ -241,6 +244,7 @@ def main():
             )
             update_health_state(live_count)
             previous_live = notify_new_live(rooms, previous_live)
+            previous_live = notify_stream_end(rooms, previous_live)
             ping_offset = wait_with_ping_checks(POLL_INTERVAL, ping_offset)
 
         except DouyuAPIError as e:

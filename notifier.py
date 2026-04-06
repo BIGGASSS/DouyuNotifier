@@ -302,3 +302,33 @@ def notify_new_live(rooms: List[Room], previous_live: Optional[Set[str]]) -> Set
                 print(f"  Notified: {room.streamer_name} is live")
 
     return current_live
+
+
+def notify_stream_end(
+    rooms: List[Room],
+    previous_live: Optional[Set[str]],
+) -> Set[str]:
+    """
+    Send Telegram notifications when streamers go offline.
+
+    Args:
+        rooms: List of Room objects
+        previous_live: Set of room_ids that were live in previous check
+
+    Returns:
+        Set of currently live room IDs
+    """
+    current_live = {r.room_id for r in rooms if r.is_live}
+
+    if previous_live is not None:
+        ended_ids = previous_live - current_live
+        if ended_ids:
+            room_lookup = {r.room_id: r for r in rooms}
+            for room_id in ended_ids:
+                room = room_lookup.get(room_id)
+                streamer_name = escape(room.streamer_name) if room else room_id
+                text = f'<b>{streamer_name}</b> has ended their stream.'
+                send_telegram(text)
+                print(f"  Notified: {streamer_name} ended stream")
+
+    return current_live
