@@ -1,18 +1,18 @@
 import unittest
 from unittest.mock import call, patch
 
-from main import validate_cookies, wait_with_ping_checks
+from main import process_room_notifications, validate_cookies, wait_with_ping_checks
 from models import DouyuAPIError, NotLoginError, Room
 
 
-def build_room() -> Room:
+def build_room(room_id: str = 'dy_1', is_live: bool = True) -> Room:
     return Room(
-        room_id='dy_1',
+        room_id=room_id,
         room_name='Room',
         streamer_name='Streamer',
         cover='',
         avatar='',
-        is_live=True,
+        is_live=is_live,
         area_name='Game',
         url='https://www.douyu.com/1',
     )
@@ -43,6 +43,24 @@ class ValidateCookiesTest(unittest.TestCase):
             validate_cookies({'acf_uid': '123'})
 
         self.assertEqual(fetch_douyu_live_status_mock.call_count, 1)
+
+
+class ProcessRoomNotificationsTest(unittest.TestCase):
+    @patch('main.notify_stream_end')
+    @patch('main.notify_new_live')
+    def test_uses_same_previous_snapshot_for_live_and_end_notifications(
+        self,
+        notify_new_live_mock,
+        notify_stream_end_mock,
+    ) -> None:
+        rooms = [build_room('dy_1', is_live=False)]
+        previous_live = {'dy_1'}
+
+        result = process_room_notifications(rooms, previous_live)
+
+        self.assertEqual(result, set())
+        notify_new_live_mock.assert_called_once_with(rooms, previous_live)
+        notify_stream_end_mock.assert_called_once_with(rooms, previous_live)
 
 
 class WaitWithPingChecksTest(unittest.TestCase):

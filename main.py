@@ -176,6 +176,16 @@ def wait_with_ping_checks(delay_seconds: int, ping_offset: int) -> int:
         current_offset = _process_ping_commands(current_offset, timeout=timeout)
 
 
+def process_room_notifications(
+    rooms: List[Room],
+    previous_live: Optional[Set[str]],
+) -> Set[str]:
+    """Send live/offline notifications using the same previous state snapshot."""
+    notify_new_live(rooms, previous_live)
+    notify_stream_end(rooms, previous_live)
+    return {room.room_id for room in rooms if room.is_live}
+
+
 def main():
     """Main loop for polling Douyu live status."""
     print('Douyu Live Status Notifier')
@@ -214,8 +224,7 @@ def main():
     print('Press Ctrl+C to stop\n')
 
     previous_live: Optional[Set[str]] = None
-    previous_live = notify_new_live(initial_rooms, previous_live)
-    previous_live = notify_stream_end(initial_rooms, previous_live)
+    previous_live = process_room_notifications(initial_rooms, previous_live)
 
     ping_offset = 0
 
@@ -226,8 +235,7 @@ def main():
             print(f'[{datetime.now():%H:%M:%S}] Checked: {live_count}/{len(rooms)} live')
 
             update_health_state(live_count)
-            previous_live = notify_new_live(rooms, previous_live)
-            previous_live = notify_stream_end(rooms, previous_live)
+            previous_live = process_room_notifications(rooms, previous_live)
             ping_offset = wait_with_ping_checks(POLL_INTERVAL, ping_offset)
 
         except NotLoginError as e:
@@ -243,8 +251,7 @@ def main():
                 f'{live_count}/{len(rooms)} live'
             )
             update_health_state(live_count)
-            previous_live = notify_new_live(rooms, previous_live)
-            previous_live = notify_stream_end(rooms, previous_live)
+            previous_live = process_room_notifications(rooms, previous_live)
             ping_offset = wait_with_ping_checks(POLL_INTERVAL, ping_offset)
 
         except DouyuAPIError as e:
