@@ -1,27 +1,34 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a small, flat Go application using package `main`. `main.go` drives startup, cookie recovery, and the polling loop; `fetcher.go` talks to Douyu; `notifier.go` handles Telegram messaging and `/ping`; `auth.go` parses and stores cookies; `config.go` contains endpoints, intervals, and environment lookups; and `models.go` defines shared room and error types. Tests live beside the implementation as `*_test.go` files.
+The executable lives in `cmd/douyu-notifier`; keep process signals and exit behavior there. Application orchestration belongs in `internal/app`, environment/default configuration in `internal/config`, cookie parsing and persistence in `internal/cookies`, provider clients and provider-specific errors in `internal/douyu` and `internal/telegram`, and shared domain types in `internal/model`. Tests live beside each package as `*_test.go` files.
 
 ## Build, Test, and Development Commands
-Use the standard Go toolchain (Go 1.22 or newer):
+Use Go 1.22 or newer:
 
 ```bash
-go run .
+go run ./cmd/douyu-notifier
 go test ./...
-go build -o douyu-notifier .
+go build -o douyu-notifier ./cmd/douyu-notifier
 ```
 
-Run a focused test with a command such as `go test -run TestValidateCookies ./...`. Format all Go changes with `gofmt -w *.go`. The application uses only the standard library, so no separate dependency installation is required.
+Run focused tests with commands such as `go test -run TestValidateCookies ./internal/app`. Format all Go changes with `gofmt`. The application uses only the standard library.
 
 ## Coding Style & Naming Conventions
-Follow idiomatic Go and keep all source formatted with `gofmt`. Use short lower-case names for package-private helpers and `PascalCase` only for exported identifiers. Pass `context.Context` through blocking network and wait operations. Keep modules small and single-purpose, wrap behavior-specific failures in the existing typed errors, and close HTTP response bodies. Avoid adding a third-party dependency when the standard library is sufficient.
+Follow idiomatic Go. Use short lower-case names for package-private helpers and `PascalCase` only for exported identifiers. Pass `context.Context` through blocking network and wait operations. Keep modules small and single-purpose, keep provider-specific failures in their provider package, and close HTTP response bodies. Prefer constructor-injected interfaces and instance dependencies to package-global test seams. Avoid third-party dependencies.
 
 ## Testing Guidelines
-Tests use Go's `testing` package, `httptest`, and small injected function or HTTP-client fakes at API boundaries. Add or update tests for every behavior change, especially cookie parsing, validation retries, Douyu response parsing, Telegram polling conflicts, cookie recovery, `/ping`, and live/offline transition notifications. Do not mark tests parallel when they replace package-level test seams. Run `go test ./...` and `go test -race ./...` before submitting.
+Tests use Go's `testing` package, `httptest`, and injected interfaces or HTTP clients at API boundaries. Add or update tests for every behavior change, especially cookie parsing/storage, validation retries, Douyu parsing/errors, Telegram polling conflicts/webhook handling, cookie recovery, `/ping`, and live/offline transitions. Before submitting, run:
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+go build -o douyu-notifier ./cmd/douyu-notifier
+```
 
 ## Commit & Pull Request Guidelines
-Recent history uses short, imperative subjects such as `Fix 409 error` and `Add support for cookie expiration notification`. Keep commits focused and subjects concise. Pull requests should explain the behavior change, note configuration or environment impact, and list verification performed. For user-facing notification changes, include a sample message or log snippet.
+Use short, imperative commit subjects and keep commits focused. Pull requests should explain behavior and configuration impact and list verification performed. For notification changes, include a sample message or log snippet.
 
 ## Security & Configuration Tips
-Never commit real Douyu cookies, bot tokens, chat IDs, a populated `cookies.json`, or built binaries. Configure secrets through `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, and treat Telegram cookie replies and `cookies.json` as sensitive local state. Keep cookie-file permissions restrictive.
+Never commit real Douyu cookies, bot tokens, chat IDs, a populated `cookies.json`, or built binaries. Configure secrets through `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. `cookies.json` remains relative to the process working directory and must use mode `0600`.
