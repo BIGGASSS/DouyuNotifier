@@ -47,6 +47,34 @@ The application:
 
 Press Ctrl+C to stop.
 
+## systemd
+
+A hardened service unit and environment-file template are provided in [`deploy/systemd`](deploy/systemd). Build and install them with:
+
+```bash
+go build -o douyu-notifier ./cmd/douyu-notifier
+sudo install -Dm0755 douyu-notifier /usr/local/bin/douyu-notifier
+sudo install -Dm0644 deploy/systemd/douyu-notifier.service \
+  /etc/systemd/system/douyu-notifier.service
+sudo install -d -m0755 /etc/douyu-notifier
+sudo install -m0600 deploy/systemd/environment.example \
+  /etc/douyu-notifier/environment
+sudoedit /etc/douyu-notifier/environment
+sudo systemctl daemon-reload
+sudo systemctl enable --now douyu-notifier
+```
+
+The unit runs under a dynamic, unprivileged user and stores `cookies.json` in a private systemd-managed state directory. If no cookie file exists, provide one through Telegram as described above.
+
+Inspect its status and logs with:
+
+```bash
+systemctl status douyu-notifier
+journalctl -u douyu-notifier -f
+```
+
+After installing a newly built binary, restart the service with `sudo systemctl restart douyu-notifier`.
+
 ## Configuration
 
 Runtime secrets come from `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Endpoints, intervals, and timeouts are defined in [`internal/config/config.go`](internal/config/config.go).

@@ -1,0 +1,40 @@
+[Unit]
+Description=Douyu live status Telegram notifier
+Documentation=https://github.com/BIGGASSS/DouyuNotifier
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/douyu-notifier
+EnvironmentFile=/etc/douyu-notifier/environment
+WorkingDirectory=/var/lib/douyu-notifier
+
+# Keep cookies.json in a private, persistent state directory while avoiding a
+# permanently allocated system account.
+DynamicUser=yes
+StateDirectory=douyu-notifier
+StateDirectoryMode=0700
+UMask=0077
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+
+# Service hardening. Network access remains available for Douyu and Telegram.
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
